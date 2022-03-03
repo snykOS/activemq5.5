@@ -19,7 +19,8 @@
 <html>
 <head>
     <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1" />
-    <title>ActiveMQ Web Demos</title>
+    <title>Chat Example - ActiveMQ Web Demos</title>
+    <link rel="stylesheet" href="chat.css" type="text/css">
     <style type="text/css" media="screen">
         @import url(styles/sorttable.css);
         @import url(styles/type-settings.css);
@@ -27,13 +28,30 @@
         @import url(styles/prettify.css);
     </style>
 
-        <script type='text/javascript' src='js/common.js'></script>
-        <script type='text/javascript' src='js/css.js'></script>
-        <script type='text/javascript' src='js/standardista-table-sorting.js'></script>
-        <script type='text/javascript' src='js/prettify.js'></script>
-        <script>addEvent(window, 'load', prettyPrint)</script>
+    <!--<script type="text/javascript" src="js/prototype.js"></script>-->
+    <!--<script type="text/javascript" src="js/amq_prototype_adapter.js"></script>-->
+    <script type="text/javascript" src="js/jquery-1.4.2.min.js"></script>
+    <script type="text/javascript" src="js/amq_jquery_adapter.js"></script>
 
+    <script type="text/javascript" src="js/amq.js"></script>
+    <script type="text/javascript" src="js/chat.js"></script>
+    <script type="text/javascript">
 
+        // Note, normally you wouldn't just add an onload function in this
+        // manner. In fact, you typically want to fire this method on the
+        // document.onready event, however this type of functionality is verbose
+        // and best left to the domain of your favorite js library.
+        //
+        // For example, in jQuery the following onload would be replaced with:
+        // jQuery(function() {
+        //     org.activemq.Amq.init({ uri: 'amq' });
+        //     org.activemq.Chat.init();
+        // }
+        window.onload = function() {
+            org.activemq.Amq.init({ uri: 'amq', logging: true, timeout: 45, clientId:(new Date()).getTime().toString() });
+            org.activemq.Chat.init();
+        };
+    </script>
 
 </head>
 
@@ -57,7 +75,8 @@
                     <div id="asf_logo">
                         <div id="activemq_logo">
                             <a style="float:left; width:280px;display:block;text-indent:-5000px;text-decoration:none;line-height:60px; margin-top:10px; margin-left:100px;"
-                               href="http://activemq.apache.org/" title="The most popular and powerful open source Message Broker">ActiveMQ</a> &trade;
+                               href="http://activemq.apache.org/"
+                               title="The most popular and powerful open source Message Broker">ActiveMQ</a>
                             <a style="float:right; width:210px;display:block;text-indent:-5000px;text-decoration:none;line-height:60px; margin-top:15px; margin-right:10px;"
                                href="http://www.apache.org/" title="The Apache Software Foundation">ASF</a>
                         </div>
@@ -66,6 +85,7 @@
 
                     <div class="top_red_bar">
                         <div id="site-breadcrumbs">
+                            <a href="index.html" title="Home">Home</a>
                         </div>
                         <div id="site-quicklinks"><P>
                             <a href="http://activemq.apache.org/support.html"
@@ -78,55 +98,69 @@
                             <tr>
                                 <td valign="top" width="100%" style="overflow:hidden;">
                                     <div class="body-content">
-                                        <h1>ActiveMQ Web Demos</h1>
 
-                                        <p>
-                                            Here you can find some examples on how you can exchange messages with ActiveMQ broker, using REST and Ajax APIs
-                                        </p>
-                                        <h2>Web sockets example</h2>
+<h1>Chat Example</h1>
 
-                                        <p>
-                                            <a href="websocket/index.html">Websockets</a> example shows how you can use websockets to exchange messages using the broker
-                                        </p>
+<p>Welcome to the Ajax chat example</p>
 
-                                        <h2>Market data example</h2>
+<div id="chatroom">
+    <div id="chat"></div>
 
-                                        <p>
-                                            <a href="portfolioPublish?count=1&refresh=2&stocks=IBMW&stocks=BEAS&stocks=MSFT&stocks=SUNW">Market data publisher</a> starts publishing
-                                            some mock market data prices
-                                        </p>
+    <div id="members"></div>
 
-                                        <p>
-                                            <a href="portfolio/portfolio.html">Portfolio</a> example shows how you could make an interactive trading portfolio which
-                                            updates in real time as the market prices change
-                                        </p>
+    <div id="input">
+        <div id="join" class="hidden">
+            Username:&nbsp;
+            <input id="username" type="text"/>
+            <button id="joinB">Join</button>
+        </div>
+        <div id="joined" class="hidden">
+            Chat:&nbsp;
+            <input id="phrase" type="text" />
+            <button id="sendB">Send</button>
+            <button id="leaveB">Leave</button>
+        </div>
+    </div>
+</div>
 
-                                        <h2>Chat example</h2>
+<p>
+    This Chat example creates an ActiveMQ broker using the configuration
+    information found in the <code>web.xml</code> file. There isn't much there.
+    Just a name-value parameter named <code>org.apache.activemq.brokerURL</code>
+    is assigned a value of <code>vm://localhost?broker.persistent=false</code>.
+    This is enough however to lazy-initialize the broker when it is needed.
+</p>
+<p>
+    The client leverages a javascript library <code>amq.js</code> to perform all
+    of the JMS-related client side code. This involves establishing a
+    communication pipeline to the JMS server. This pipeline uses a long-poll
+    connection to the server. All JMS communication will be received down this
+    pipe, and when the JMS server has no traffic to send, this pipeline will
+    patiently wait until there is new traffic or until it times out. If a
+    timeout does occur, the connection will reconnect to the server for another
+    round. (Of course you will want/need to use a server that supports
+    continuations in order for this to scale beyond a few hundred clients.)
+</p>
+<p>
+    The <code>chat.js</code> file contains the script to respond to the UI
+    interactions. It also talks to the <code>amq.js</code> file to send messages
+    and provides a message handler that will respond to incoming JMS messages.
+</p>
+<p>
+    There is no server-side state in this application. The client sets up a JMS
+    Topic on the server and attaches itself as a listener to this topic. From
+    that point, all messages that are sent to the topic are received by each
+    listener. Even the list of members in the chat room are the result of
+    clients replying to a ping request.
+</p>
+<p>
+    Please note that <code>amq.js</code> has been refactored to allow AJAX calls
+    to be made using any javascript library. Example adapter classes for <a href="http://jquery.com/">jQuery</a>
+    and <a href="http://www.prototypejs.org/">Prototype</a> have been provided.
+</p>
 
-                                        <p>
-                                            <a href="chat.html">Chat room</a> example shows how you can use Streamlets and ActiveMQ to create a simple chat room
-                                        </p>
 
-                                        <h2>Simple Form based browser example</h2>
-
-                                        <p>
-                                            <a href="send.html">Send a message</a>
-                                        </p>
-
-                                        <p>
-                                            <a href="message/FOO/BAR?readTimeout=10000&type=queue">Receive a message</a>
-                                        </p>
-
-                                        <h2>Queue browser example</h2>
-
-                                        <ul>
-                                            <li><a href="queueBrowse/FOO/BAR">Browse a queue</a></li>
-                                            <li><a href="queueBrowse/FOO/BAR?view=xml">Browse a queue as XML</a></li>
-                                            <li><a href="queueBrowse/FOO/BAR?view=rss&feedType=atom_1.0">Browse a queue as Atom</a></li>
-                                            <li><a href="queueBrowse/FOO/BAR?view=rss&feedType=rss_1.0">Browse a queue as RSS 1.0</a></li>
-                                            <li><a href="queueBrowse/FOO/BAR?view=rss&feedType=rss_2.0">Browse a queue as RSS 2.0</a></li>
-                                        </ul>
-                                    </div>
+                                  </div>
                                 </td>
                                 <td valign="top">
 
